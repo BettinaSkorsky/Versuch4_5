@@ -1,7 +1,9 @@
 #include "main.h"
 #include "led.h"
 #include "usart.h"
-
+#define TRUE 1
+#define FALSE 0
+typedef uint8_t bool;
 #include "led.h"
 
 void draw_rect_center() {
@@ -27,7 +29,7 @@ void draw_text_center(char *text) {
 	BSP_LCD_DisplayStringAt(centerX-textW/2,centerY-textH/2, (uint8_t *)text, LEFT_MODE);
 }
 
-void init_ADC() {
+void init_ADC(bool single_shot) {
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN; 						// GPIOA clock an
 	GPIOA->MODER |= GPIO_MODER_MODER0_0 | GPIO_MODER_MODER0_1; 	// Analog Mode
 
@@ -38,6 +40,18 @@ void init_ADC() {
 	//ADC3->CR2 |= ADC_CR2_ALIGN;							    // Linksbuendig abspeichern
 	ADC3->CR2 |= ADC_CR2_CONT;    								// Staendig wandeln
 	ADC3->CR2 |= ADC_CR2_SWSTART; 								// Start der Wandlung(en)
+	if (single_shot)											//nur eine Messung
+		ADC3->CR2 &= ~ADC_CR2_CONT;								//löschen des ADC_CR2_CONT bits
+	else														// Staendig wandeln
+		ADC3->CR2 |= ADC_CR2_CONT;
+}
+uint16_t adc_get(){
+	int adress = (ADC3-> DR&0xff);
+	return adress;
+}
+
+int adc_in_millivolt (uint16_t adc_value){
+	uint16_t value=3300*adc_value/255;
 }
 int main(void) {
 	int counter = 0;
@@ -47,7 +61,7 @@ int main(void) {
 	BSP_LCD_Clear(LCD_COLOR_YELLOW);
 	draw_rect_center();
 	draw_text_center("Hallo MIT Labor!");
-	init_ADC();
+	init_ADC(FALSE);
 	HAL_Delay(2000);
 	BSP_LCD_Clear(LCD_COLOR_BLUE);
 	while (1) {
@@ -57,6 +71,26 @@ int main(void) {
 		char buffer[20];
 		snprintf(buffer, sizeof(buffer), "%5d:ADC=%4.2f", counter++, result);
 		draw_text_center(buffer);
+		uint32_t time_ref = HAL_GetTick();
 
+			int value = adc_in_millivolt(adc_get());
+			printf("%5d:%2d.%02dV\n", HAL_GetTick()/1000, value/1000, (value%1000)/10);
 	}
 }
+void start_adc(){
+	ADC3->CR2 |= ADC_CR2_SWSTART; 								// Start der Wandlung(en)
+}
+/*
+ * 	int summe =0;
+	int varianz =0;
+	for (int i=0; i<1000; i++){
+		summe = summe + adc_value;
+	}
+	int mittelwert = summe/1000;
+	for (int i=0; i<1000; i++){
+		varianz = (adc_value - mittelwert)²;
+	}
+	varianz = varianz/1000;
+	int standardabweichung = sqrt(varianz);
+	return mittelwert;
+ */
